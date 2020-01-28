@@ -101,7 +101,7 @@ class FpoNHM:
         # num HRUs
         self.num_hru = None
 
-        # grouby GFv11_id on wieghts file
+        # grouby hru_id_nat on wieghts file
         self.unique_hru_ids = None
 
         # numpy arrays to store mapped climate data
@@ -130,9 +130,24 @@ class FpoNHM:
         :param optpath: directory to save netcdf input files
         :return: success or failure
         """
-        self.iptpath = iptpath
-        self.optpath = optpath
-        self.wghts_file = weights_file
+        self.iptpath = Path(iptpath)
+        if self.iptpath.exists():
+            print('input path exits')
+        else:
+            print('input path does not exist')
+
+        self.optpath = Path(optpath)
+        if self.iptpath.exists():
+            print('output path exits')
+        else:
+            print('output path does not exist')
+
+        self.wghts_file = Path(weights_file)
+        if self.iptpath.exists():
+            print('weights file exits')
+        else:
+            print('weights file not exist')
+        self.wghts_id = None
         self.type = type
         self.numdays = days
         self.start_date = start_date
@@ -316,10 +331,9 @@ class FpoNHM:
         #       Read hru weights
         # =========================================================
 
-        wght_uofi = pd.read_csv(self.iptpath / Path(self.wghts_file))
-
-        self.unique_hru_ids = wght_uofi.groupby('GFv11_id')
-
+        wght_uofi = pd.read_csv(self.wghts_file)
+        self.wghts_id = wght_uofi.columns[1]
+        self.unique_hru_ids = wght_uofi.groupby(self.wghts_id)
         print('finished reading weight file')
 
         # intialize numpy arrays to store climate vars
@@ -356,29 +370,17 @@ class FpoNHM:
             tws_h_flt = self.ws_h.values[day, :, :].flatten(order='K')
 
             for index, row in self.gdf.iterrows():
-
-                # weight_id_rows = wght_df_40.loc[wght_df_40['hru_id_nat'] == row['hru_id_nat']]
-                try:
-                    # weight_id_rows = self.unique_hru_ids.get_group(row['hru_id_nat'])
-                    weight_id_rows = self.unique_hru_ids.get_group(row['GFv11_id'])
-                    tmax[index] = np.nan_to_num(np_get_wval(tmax_h_flt, weight_id_rows, index+1) - 273.5)
-                    tmin[index] = np.nan_to_num(np_get_wval(tmin_h_flt, weight_id_rows, index+1) - 273.5)
-                    ppt[index] = np.nan_to_num(np_get_wval(tppt_h_flt, weight_id_rows, index+1))
-                    rhmax[index] = np.nan_to_num(np_get_wval(trhmax_h_flt, weight_id_rows, index+1))
-                    rhmin[index] = np.nan_to_num(np_get_wval(trhmin_h_flt, weight_id_rows, index+1))
-                    ws[index] = np.nan_to_num(np_get_wval(tws_h_flt, weight_id_rows, index+1))
-                except KeyError:
-                    tmax[index] = 0.0
-                    tmin[index] = 0.0
-                    ppt[index] = 0.0
-                    rhmax[index] = 0.0
-                    rhmin[index] = 0.0
-                    ws[index] = 0.0
+                # weight_id_rows = wght_df_40.loc[wght_df_40[self.wghts_id] == row[self.wghts_id]]
+                weight_id_rows = self.unique_hru_ids.get_group(row[self.wghts_id])
+                tmax[index] = np.nan_to_num(np_get_wval(tmax_h_flt, weight_id_rows, index+1) - 273.5)
+                tmin[index] = np.nan_to_num(np_get_wval(tmin_h_flt, weight_id_rows, index+1) - 273.5)
+                ppt[index] = np.nan_to_num(np_get_wval(tppt_h_flt, weight_id_rows, index+1))
+                rhmax[index] = np.nan_to_num(np_get_wval(trhmax_h_flt, weight_id_rows, index+1))
+                rhmin[index] = np.nan_to_num(np_get_wval(trhmin_h_flt, weight_id_rows, index+1))
+                ws[index] = np.nan_to_num(np_get_wval(tws_h_flt, weight_id_rows, index+1))
 
                 if index % 10000 == 0:
-                    # print(index, row['hru_id_nat'])
-                    print(index, row['GFv11_id'])
-
+                    print(index, row[self.wghts_id])
 
             self.np_tmax[day, :] = tmax
             self.np_tmin[day, :] = tmin
@@ -478,8 +480,7 @@ class FpoNHM:
         time[:] = np.arange(0, self.numdays)
         lon[:] = tlon
         lat[:] = tlat
-        hru[:] = self.gdf['GFv11_id'].values
-
+        hru[:] = self.gdf[self.wghts_id].values
         # print(hruid)
         # tmax[0,:] = gdf['tmax'].values
         # tmin[0,:] = gdf['tmin'].values
